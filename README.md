@@ -17,7 +17,7 @@ derivative (or their gradient in the case of multiple inputs).  For example:
 julia> using BackwardAutodiff
 julia> r = (x,y,z) -> sqrt(x*x + y*y + z*z)
 julia> r_hat = D(r)
-julia> r_hat(1,1,1)
+julia> r_hat(1.0,1.0,1.0)
 3-element Array{Float64,1}:
  0.5773502691896258
  0.5773502691896258
@@ -32,3 +32,7 @@ julia> [1,1,1]/sqrt(3)
 See instructions for the ForwardAutodiff.jl package for more description and a
 tutorial notebook about autodiff as well as notes about how to use packages in
 general for Julia.  
+
+TODO: as currently implemented, the traversal of the expression graph is
+depth-first, so we traverse all the way to the top for each branch of a binary
+operation.  This is not efficient!
