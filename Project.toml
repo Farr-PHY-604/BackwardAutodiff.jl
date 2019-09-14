@@ -1,0 +1,8 @@
+name = "BackwardAutodiff"
+uuid = "c1017404-24a3-4be9-9eef-807efd1e042a"
+authors = ["Will M. Farr <wfarr-vscholar@flatironinstitute.org>"]
+version = "0.1.0"
+
+[deps]
+IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
