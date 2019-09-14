@@ -54,6 +54,8 @@ Returns a function that computes the derivative of `f` (if it is
 single-argument) or the gradient of `f` (if it is multi-argument or takes a
 structured argument).  If `i` is given returns the `i`th component of the
 gradient (though this does not reduce the cost with backprop).
+
+Currently works only for `f` with scalar outputs.
 """
 function D(f)
     function dfdx(x::T) where T <: Number
