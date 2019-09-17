@@ -2,6 +2,14 @@ using BackwardAutodiff
 using Test: @test, @testset
 
 @testset "FowardAutodiff.jl tests" begin
+    @testset "Basic arithmetic" begin
+        x = randn()
+        y = randn()
+        z = randn()
+
+        @test isapprox(D(x->2*x)(x), 2)
+    end
+
     @testset "Transcendental Functions" begin
         x = randn()
         @test isapprox(D(exp)(x), exp(x))
@@ -49,7 +57,7 @@ using Test: @test, @testset
         freq = sqrt(2)
 
         function f(x)
-            return exp(-x/pi)*sin(2.0*pi*freq*x)
+            return exp(-x/pi)*sin(2*pi*freq*x)
         end
         fprime = D(f)
 

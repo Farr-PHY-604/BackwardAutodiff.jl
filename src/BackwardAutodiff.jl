@@ -3,37 +3,60 @@ import Base: exp, sin, cos, tan, +, -, *, /, sqrt, convert, promote_rule, zero
 
 export D
 
-# This takes some explanation.  The method here is for each operation to compute
-# a result *and* provide a function for later use that will perform the
-# backpropogation.  For an operation that maps x -> y in the contex of an
-# overall computation of some function f, the backprop function will be provided
-# with the value of df/dy, and then should compute df/dx = df/dy * dy/dx (i.e.
-# multiply the provided value by the derivative of the x->y computation) and
-# provide df/dx to the bp functions of its inputs---that is, to propogate it "up
-# the chain."
-struct Lamisetinifni{T <: Number} <: Number
+mutable struct Lamisetinifni{T <: Number} <: Number
     x::T
-    bp
+    dfdy::T
+    parent::Union{Lamisetinifni{T}, Array{Lamisetinifni{T},1}, Int, Nothing}
+    bp!
+end
+
+# These are needed for automatic promotion of parents when a result of a
+# different type appears out of a computation.
+function Lamisetinifni(x::T, dfdy::T, p::Lamisetinifni{S}, bp!) where {T, S}
+    Lamisetinifni(x, dfdy, convert(Lamisetinifni{T}, p), bp!)
+end
+function Lamisetinifni(x::T, dfdy::T, p::Array{Lamisetinifni{S}, 1}, bp!) where {T, S}
+    Lamisetinifni(x, dfdy, convert_parents(T, p), bp!)
 end
 
 function convert(::Type{Lamisetinifni{T}}, x::T) where T <: Number
-    Lamisetinifni(x, dfdy -> nothing)
+    Lamisetinifni(x, zero(T), nothing, (dfdy, parents) -> nothing)
+end
+
+function convert_parents(::Type{T}, x::Nothing) where T
+    nothing
+end
+function convert_parents(::Type{T}, x::Int) where T
+    x
+end
+function convert_parents(::Type{T}, l::Lamisetinifni{S}) where {T, S}
+    convert(Lamisetinifni{T}, l)
+end
+function convert_parents(::Type{T}, ls::Array{Lamisetinifni{S}}) where {T, S}
+    Lamisetinifni{T}[convert(Lamisetinifni{T}, l) for l in ls]
+end
+
+# The following is needed as a no-op conversion when creating arrays of
+# Lamisetinifni{T}, or else the effect of the below T, S => T conversion will be
+# a copy.
+function convert(::Type{Lamisetinifni{T}}, x::Lamisetinifni{T}) where {T}
+    x
 end
 
 function convert(::Type{Lamisetinifni{T}}, x::Lamisetinifni{S}) where {T, S}
-    Lamisetinifni(T(x.x), x.bp)
+    Lamisetinifni(T(x.x), T(x.dfdy), convert_parents(T, x.parent), x.bp!)
 end
 
 function convert(::Type{Lamisetinifni{T}}, x::S) where {T, S <: Number}
-    Lamisetinifni(T(x), dfdy -> nothing)
+    Lamisetinifni(T(x), zero(T), nothing, (dfdy, parents) -> nothing)
 end
 
 function zero(x::Lamisetinifni{T}) where T
-    Lamisetinifni(zero(x.x), dfdy -> nothing)
+    Lamisetinifni(zero(T), zero(T), nothing, (dfdy, parents) -> nothing)
 end
 
 function promote_rule(::Type{Lamisetinifni{T}}, ::Type{Lamisetinifni{S}}) where {T, S}
-    Lamisetinifni{promte_type(T, S)}
+    Lamisetinifni{promote_type(T, S)}
 end
 
 function promote_rule(::Type{Lamisetinifni{T}}, ::Type{S}) where {T, S <: Number}
@@ -48,6 +71,53 @@ function promote_rule(::Type{S}, ::Type{Lamisetinifni{T}}) where {S <: AbstractI
     Lamisetinifni{promote_type(S, T)}
 end
 
+function push_parents!(queue::Array{Lamisetinifni{T}, 1}, ::Nothing) where T
+    # Do nothing
+end
+function push_parents!(queue::Array{Lamisetinifni{T}, 1}, i::Int) where T
+    # Do nothing
+end
+function push_parents!(queue::Array{Lamisetinifni{T}, 1}, ls::Array{Lamisetinifni{T}, 1}) where T
+    append!(queue, ls)
+end
+function push_parents!(queue::Array{Lamisetinifni{T}, 1}, l::Lamisetinifni{T}) where T
+    push!(queue, l)
+end
+
+function backprop!(l::Lamisetinifni{T}) where T
+    # Apparently we need this construction because otherwise l gets copied when
+    # put into the array.
+    backprop!([l])
+end
+function backprop!(queue::Array{Lamisetinifni{T},1}) where T
+    while length(queue) > 0
+        l = popfirst!(queue)
+        l.bp!(l.dfdy, l.parent)
+        push_parents!(queue, l.parent)
+    end
+end
+
+function collect_outputs(l::Lamisetinifni{T}) where T
+    queue = Lamisetinifni{T}[l]
+
+    outputs = Lamisetinifni{T}[]
+
+    while length(queue) > 0
+        l = popfirst!(queue)
+        if typeof(l.parent) <: Int
+            push!(outputs, l)
+        elseif typeof(l.parent) == Lamisetinifni{T}
+            push!(queue, l.parent)
+        elseif typeof(l.parent) == Array{Lamisetinifni{T}, 1}
+            append!(queue, l.parent)
+        else # Nothing
+            # Do nothing
+        end
+    end
+
+    outputs
+end
+
 """    D([i], f)
 
 Returns a function that computes the derivative of `f` (if it is
@@ -59,39 +129,49 @@ Currently works only for `f` with scalar outputs.
 """
 function D(f)
     function dfdx(x::T) where T <: Number
-        dfdx_store = zero(x)
-
         # Pass the function a backward infinitesimal whose backprop function
         # stores the backprop derivative in dfdx_store
-        result = f(Lamisetinifni(x, dfdy -> dfdx_store += dfdy))
 
-        # Call the backprop function that is returned from the evaluation of f
-        # with derivative one.  That function will backprop "up" the stack of f,
-        # with the result that the accumulated gradient will be stored in
-        # dfdx_store.
-        result.bp(one(result.x))
+        x = Lamisetinifni(x, zero(x), 1, (dfdy, parents) -> nothing)
 
-        return dfdx_store
+        result = f(x)
+
+        result.dfdy = one(result.x)
+        backprop!(result)
+
+        y = collect_outputs(result)[1]
+
+        return y.dfdy
     end
 
     function dfdx(x::Array{T}) where T <: Number
-        dfdx_store = zeros(T, size(x)...)
-
-        fargs = [Lamisetinifni(xelt, dfdy -> dfdx_store[i] += dfdy) for (i, xelt) in enumerate(x)]
+        fargs = [Lamisetinifni(xelt, zero(xelt), i, (dfdy, parents) -> nothing) for (i, xelt) in enumerate(x)]
         result = f(fargs)
-        result.bp(one(result.x))
+        result.dfdy = one(result.x)
+        backprop!(result)
+        y = collect_outputs(result)
 
-        return dfdx_store
+        grad = zeros(typeof(result.x), length(x))
+        for yelt in y
+            grad[yelt.parent] = yelt.dfdy
+        end
+
+        return grad
     end
 
     function dfdx(x...)
-        dfdx_store = [zero(xelt) for xelt in x]
-
-        fargs = [Lamisetinifni(xelt, dfdy -> dfdx_store[i] += dfdy) for (i, xelt) in enumerate(x)]
+        fargs = [Lamisetinifni(xelt, zero(xelt), i, (dfdy, parents) -> nothing) for (i, xelt) in enumerate(x)]
         result = f(fargs...)
-        result.bp(one(result.x))
+        result.dfdy = one(result.x)
+        backprop!(result)
+        y = collect_outputs(result)
 
-        return dfdx_store
+        grad = zeros(typeof(result.x), length(x))
+        for yelt in y
+            grad[yelt.parent] = yelt.dfdy
+        end
+
+        return grad
     end
 
     return dfdx
@@ -106,67 +186,99 @@ function D(i::Integer, f)
     return df_wrapper
 end
 
-function +(x::Lamisetinifni{T}, y::Lamisetinifni{T}) where T
-    # Unit derivative, so dfdy backprops to both arguments.
-    function bp(dfdy)
-        x.bp(dfdy)
-        y.bp(dfdy)
-    end
-
-    Lamisetinifni(x.x + y.x, bp)
+function bpp!(dfdy, xy)
+    x, y = xy
+    x.dfdy += dfdy
+    y.dfdy += dfdy
 end
 
-function -(x::Lamisetinifni{T}, y::Lamisetinifni{T}) where T
-    function bp(dfdy)
-        x.bp(dfdy)
-        y.bp(-dfdy)
-    end
+function +(x::Lamisetinifni{T}, y::Lamisetinifni{T}) where T
+    Lamisetinifni(x.x + y.x, zero(T), [x, y], bpp!)
+end
 
-    Lamisetinifni(x.x - y.x, bp)
+function bpm!(dfdy, xy)
+    x, y = xy
+    x.dfdy += dfdy
+    y.dfdy -= dfdy
+end
+function -(x::Lamisetinifni{T}, y::Lamisetinifni{T}) where T
+    Lamisetinifni(x.x - y.x, zero(T), [x, y], bpm!)
+end
+
+function bpum!(dfdy, x)
+    x.dfdy -= dfdy
 end
 function -(x::Lamisetinifni{T}) where T
-    Lamisetinifni(-x.x, dfdy -> x.bp(-dfdy))
+    Lamisetinifni(-x.x, zero(T), x, bpum!)
 end
 
+function bpt!(dfdy, xy)
+    x,y = xy
+    x.dfdy += dfdy*y.x
+    y.dfdy += x.x*dfdy
+end
 function *(x::Lamisetinifni{T}, y::Lamisetinifni{T}) where T
-    function bp(dfdy)
-        x.bp(y.x*dfdy)
-        y.bp(x.x*dfdy)
-    end
-
-    Lamisetinifni(x.x*y.x, bp)
+    Lamisetinifni(x.x*y.x, zero(T), [x,y], bpt!)
 end
 
 function /(x::Lamisetinifni{T}, y::Lamisetinifni{T}) where T
-    function bp(dfdy)
-        x.bp(dfdy/y.x)
-        y.bp(-x.x*dfdy/(y.x*y.x))
+    yinv = one(T)/y.x
+
+    function bp!(dfdy, xy)
+        a,b = xy
+        a.dfdy += dfdy*yinv
+        b.dfdy -= a.x*dfdy*(yinv*yinv)
     end
 
-    Lamisetinifni(x.x/y.x, bp)
-end
-
-function sqrt(x::Lamisetinifni{T}) where T
-    sqrtx = sqrt(x.x)
-    Lamisetinifni(sqrtx, dfdy -> x.bp(one(x.x)/(2*sqrtx)*dfdy))
+    Lamisetinifni(x.x*yinv, zero(T), [x,y], bp!)
 end
 
 function exp(x::Lamisetinifni{T}) where T
     expx = exp(x.x)
-    Lamisetinifni(expx, dfdy -> x.bp(expx*dfdy))
+
+    function bp!(dfdy, p)
+        p.dfdy += dfdy*expx
+    end
+
+    Lamisetinifni(expx, zero(expx), x, bp!)
 end
 
 function sin(x::Lamisetinifni{T}) where T
-    Lamisetinifni(sin(x.x), dfdy -> x.bp(cos(x.x)*dfdy))
+    function bp!(dfdy, p)
+        p.dfdy += cos(x.x)*dfdy
+    end
+
+    sx = sin(x.x)
+    Lamisetinifni(sx, zero(sx), x, bp!)
 end
 
 function cos(x::Lamisetinifni{T}) where T
-    Lamisetinifni(cos(x.x), dfdy -> x.bp(-sin(x.x)*dfdy))
+    function bp!(dfdy, p)
+        p.dfdy -= sin(x.x)
+    end
+
+    cx = cos(x.x)
+    Lamisetinifni(cx, zero(cx), x, bp!)
 end
 
 function tan(x::Lamisetinifni{T}) where T
     c = cos(x.x)
-    Lamisetinifni(tan(x.x), dfdy -> x.bp(dfdy/(c*c)))
+    function bp!(dfdy, p)
+        p.dfdy += dfdy/(c*c)
+    end
+
+    tx = tan(x.x)
+    Lamisetinifni(tx, zero(tx), x, bp!)
+end
+
+function sqrt(x::Lamisetinifni{T}) where T
+    sqrtx = sqrt(x.x)
+
+    function bp!(dfdy, p)
+        p.dfdy += one(dfdy)/(2*sqrtx)
+    end
+
+    Lamisetinifni(sqrtx, zero(sqrtx), x, bp!)
 end
 
 end
