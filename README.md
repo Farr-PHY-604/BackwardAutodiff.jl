@@ -32,7 +32,3 @@ julia> [1,1,1]/sqrt(3)
 See instructions for the ForwardAutodiff.jl package for more description and a
 tutorial notebook about autodiff as well as notes about how to use packages in
 general for Julia.  
-
-TODO: as currently implemented, the traversal of the expression graph is
-depth-first, so we traverse all the way to the top for each branch of a binary
-operation.  This is not efficient!

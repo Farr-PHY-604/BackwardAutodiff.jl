@@ -3,6 +3,15 @@ import Base: exp, sin, cos, tan, +, -, *, /, sqrt, convert, promote_rule, zero
 
 export D
 
+# This is the structure that stores the autodiff information.  The name is
+# `Infinitesimal` spelled backward.  The elements are `x`, the result of a
+# computation; `dfdy` a storage location where the derivative of some overall
+# computation (`f(x)`) with respect to the output of this element is stored;
+# `parent` storing the "parent" locations that have been used to produce the
+# result `x`; and `bp!` a function that propogates the derivative `dfdy` to the
+# parents via `dfdx = dydx * dfdy` where `dydx` is the derivative of this piece
+# of the computation, `dfdy` is the derivative of the overall function with
+# respect to the output, and `dfdx` is the same for the next level up.
 mutable struct Lamisetinifni{T <: Number} <: Number
     x::T
     dfdy::T
@@ -92,7 +101,15 @@ single-argument) or the gradient of `f` (if it is multi-argument or takes a
 structured argument).  If `i` is given returns the `i`th component of the
 gradient (though this does not reduce the cost with backprop).
 
-Currently works only for `f` with scalar outputs.
+Currently works only for `f` with scalar outputs.  Also, note that the autodiff
+will fail unless the output type is identical to the input type (the code
+automatically converts constants and non-differentiated expressions to the
+appropriate type---only the input and output type of the function needs to
+match).
+
+So, for example, `D(cos)(3)` will fail (because the output type is `Float64` not
+`Int`), while `D(cos)(3.0)` will work fine and return `-sin(3.0)`.
+
 """
 function D(f)
     function dfdx(x::T) where T <: Number
