@@ -25,13 +25,6 @@ using Test: @test, @testset
         @test isapprox(D(sqrt)(x + 0im), 1/(2*sqrt(x + 0im)))
     end
 
-    @testset "Type promotion" begin
-        @test isapprox(D(sin)(2//3), cos(2//3)) # Rationals
-        @test isapprox(D(sin)(1+2im), cos(1+2im)) # Complex integers!
-        @test isapprox(D(cos)(1.0+3.5im), -sin(1.0+3.5im)) # Boring complex floating point numbers
-        @test isapprox(D(sqrt)(2), 1/(2*sqrt(2.0))) # Automatically promotes to the correct type.
-    end
-
     @testset "compound function bits" begin
         x = randn()
         y = randn()
@@ -47,7 +40,7 @@ using Test: @test, @testset
         @test isapprox(D(x -> -x)(x), -1)
         @test isapprox(D(x -> exp(-x/pi))(x), -exp(-x/pi)/pi)
         @test isapprox(D(x -> sin(2*pi*sqrt(2)*x))(x), 2*pi*sqrt(2)*cos(2*pi*sqrt(2)*x))
-        @test isapprox(D(x -> exp(-x/pi))(3), -exp(-3/pi)/pi)
+        @test isapprox(D(x -> exp(-x/pi))(3.0), -exp(-3/pi)/pi)
         @test isapprox(D(x -> exp(-x)*sin(x))(x), -exp(-x)*sin(x) + exp(-x)*cos(x))
         @test isapprox(D(x -> exp(-x))(x), -exp(-x))
         @test isapprox(D(x -> x*x)(x), 2*x)
@@ -65,7 +58,7 @@ using Test: @test, @testset
             return exp(-x/pi)*(2*pi*freq*cos(2*pi*freq*x) - sin(2*pi*freq*x)/pi)
         end
 
-        @test isapprox(fprime(3), laborious_fprime(3))
+        @test isapprox(fprime(3.0), laborious_fprime(3.0))
     end
 
     @testset "partials of simple function" begin

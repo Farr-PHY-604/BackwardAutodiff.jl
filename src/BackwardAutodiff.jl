@@ -10,53 +10,20 @@ mutable struct Lamisetinifni{T <: Number} <: Number
     bp!
 end
 
-# These are needed for automatic promotion of parents when a result of a
-# different type appears out of a computation.
-function Lamisetinifni(x::T, dfdy::T, p::Lamisetinifni{S}, bp!) where {T, S}
-    Lamisetinifni(x, dfdy, convert(Lamisetinifni{T}, p), bp!)
-end
-function Lamisetinifni(x::T, dfdy::T, p::Array{Lamisetinifni{S}, 1}, bp!) where {T, S}
-    Lamisetinifni(x, dfdy, convert_parents(T, p), bp!)
-end
-
 function convert(::Type{Lamisetinifni{T}}, x::T) where T <: Number
     Lamisetinifni(x, zero(T), nothing, (dfdy, parents) -> nothing)
-end
-
-function convert_parents(::Type{T}, x::Nothing) where T
-    nothing
-end
-function convert_parents(::Type{T}, x::Int) where T
-    x
-end
-function convert_parents(::Type{T}, l::Lamisetinifni{S}) where {T, S}
-    convert(Lamisetinifni{T}, l)
-end
-function convert_parents(::Type{T}, ls::Array{Lamisetinifni{S}}) where {T, S}
-    Lamisetinifni{T}[convert(Lamisetinifni{T}, l) for l in ls]
-end
-
-# The following is needed as a no-op conversion when creating arrays of
-# Lamisetinifni{T}, or else the effect of the below T, S => T conversion will be
-# a copy.
-function convert(::Type{Lamisetinifni{T}}, x::Lamisetinifni{T}) where {T}
-    x
-end
-
-function convert(::Type{Lamisetinifni{T}}, x::Lamisetinifni{S}) where {T, S}
-    Lamisetinifni(T(x.x), T(x.dfdy), convert_parents(T, x.parent), x.bp!)
 end
 
 function convert(::Type{Lamisetinifni{T}}, x::S) where {T, S <: Number}
     Lamisetinifni(T(x), zero(T), nothing, (dfdy, parents) -> nothing)
 end
 
-function zero(x::Lamisetinifni{T}) where T
-    Lamisetinifni(zero(T), zero(T), nothing, (dfdy, parents) -> nothing)
+function convert(::Type{Lamisetinifni{T}}, x::Lamisetinifni{T}) where T
+    x
 end
 
-function promote_rule(::Type{Lamisetinifni{T}}, ::Type{Lamisetinifni{S}}) where {T, S}
-    Lamisetinifni{promote_type(T, S)}
+function zero(x::Lamisetinifni{T}) where T
+    Lamisetinifni(zero(T), zero(T), nothing, (dfdy, parents) -> nothing)
 end
 
 function promote_rule(::Type{Lamisetinifni{T}}, ::Type{S}) where {T, S <: Number}
