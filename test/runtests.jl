@@ -48,17 +48,25 @@ using Test: @test, @testset
 
     @testset "compound function" begin
         freq = sqrt(2)
+        A = randn()
+        B = randn()
+
+        a = A/sqrt(A*A + B*B)
+        b = B/sqrt(A*A + B*B)
+        phi = atan(b, a)
+
+        x = randn()
 
         function f(x)
-            return exp(-x/pi)*sin(2*pi*freq*x)
+            return exp(-x/pi)*(b*cos(2*pi*freq*x) + a*sin(2*pi*freq*x))
         end
         fprime = D(f)
 
         function laborious_fprime(x)
-            return exp(-x/pi)*(2*pi*freq*cos(2*pi*freq*x) - sin(2*pi*freq*x)/pi)
+            return exp(-x/pi)*(2*pi*freq*cos(2*pi*freq*x + phi) - sin(2*pi*freq*x + phi)/pi)
         end
 
-        @test isapprox(fprime(3.0), laborious_fprime(3.0))
+        @test isapprox(fprime(x), laborious_fprime(x))
     end
 
     @testset "partials of simple function" begin
@@ -112,5 +120,12 @@ using Test: @test, @testset
          x,y,z = randn(3)
 
          @test isapprox(D(p)(x,y,z), gp(x,y,z))
+    end
+
+    @testset "log derivative" begin
+        x = rand()
+        @test isapprox(D(log)(x), 1/x)
+
+        @test isapprox(D(x -> log(exp(x)))(x), 1.0)
     end
 end

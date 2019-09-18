@@ -1,5 +1,5 @@
 module BackwardAutodiff
-import Base: exp, sin, cos, tan, +, -, *, /, sqrt, convert, promote_rule, zero
+import Base: exp, log, sin, cos, tan, +, -, *, /, sqrt, convert, promote_rule, zero
 
 export D
 
@@ -238,7 +238,7 @@ end
 
 function cos(x::Lamisetinifni{T}) where T
     function bp!(dfdy, p)
-        p.dfdy -= sin(x.x)
+        p.dfdy -= sin(x.x)*dfdy
     end
 
     cx = cos(x.x)
@@ -259,10 +259,18 @@ function sqrt(x::Lamisetinifni{T}) where T
     sqrtx = sqrt(x.x)
 
     function bp!(dfdy, p)
-        p.dfdy += one(dfdy)/(2*sqrtx)
+        p.dfdy += dfdy/(2*sqrtx)
     end
 
     Lamisetinifni(sqrtx, zero(sqrtx), x, bp!)
+end
+
+function log(x::Lamisetinifni{T}) where T
+    function bp!(dfdy, p)
+        p.dfdy += dfdy/x.x
+    end
+
+    Lamisetinifni(log(x.x), zero(T), x, bp!)
 end
 
 end
